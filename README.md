@@ -121,3 +121,20 @@ uv run ./playbooks/configure-ssh-client.yml -e "state=absent"
 ```
 
 </details>
+
+## Maintenance
+
+### Update and Reboot Nodes
+
+Keep your cluster up to date:
+
+```bash
+uv run ./playbooks/update.yml
+```
+
+This will:
+- Update package cache
+- Upgrade all packages
+- Check if reboot is required
+- Automatically reboot nodes that need it
+- Wait for nodes to come back online

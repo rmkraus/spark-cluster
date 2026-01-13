@@ -1,0 +1,44 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Update and Reboot Cluster Nodes
+  hosts: spark_cluster
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Update package cache
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 0
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: dist
+      when: ansible_facts['os_family'] == "Debian"
+      register: apt_upgrade_result
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+
+    - name: Display reboot status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: Reboot {{ 'REQUIRED' if reboot_required.stat.exists else 'not required' }}"
+
+    - name: Reboot nodes if required
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+        msg: "Rebooting {{ inventory_hostname }} after package upgrade"
+      when: reboot_required.stat.exists
+
+    - name: Wait for nodes to come back online
+      ansible.builtin.wait_for_connection:
+        delay: 10
+        timeout: 300
+      when: reboot_required.stat.exists
+
+    - name: Verify system is up
+      ansible.builtin.ping:
+      when: reboot_required.stat.exists
