@@ -1,0 +1,63 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Install NVIDIA Workbench
+  hosts: spark_cluster
+  gather_facts: true
+
+  vars:
+    state: present
+    nvwb_dir: "{{ ansible_env.HOME }}/.nvwb/bin"
+    nvwb_cli_path: "{{ nvwb_dir }}/nvwb-cli"
+    nvwb_base_url: "https://workbench.download.nvidia.com/stable/workbench-cli"
+
+  tasks:
+    - name: Create NVIDIA Workbench directory
+      ansible.builtin.file:
+        path: "{{ nvwb_dir }}"
+        state: directory
+        mode: '0755'
+      when: state == "present"
+
+    - name: Get latest Workbench CLI version
+      ansible.builtin.uri:
+        url: "{{ nvwb_base_url }}/LATEST"
+        return_content: true
+      register: nvwb_latest
+      when: state == "present"
+
+    - name: Download NVIDIA Workbench CLI
+      ansible.builtin.get_url:
+        url: "{{ nvwb_base_url }}/{{ nvwb_latest.content | trim }}/nvwb-cli-{{ ansible_facts['system'] }}-{{ ansible_facts['architecture'] }}"
+        dest: "{{ nvwb_cli_path }}"
+        mode: '0755'
+      when: state == "present"
+
+    - name: Install NVIDIA Workbench
+      ansible.builtin.command: "{{ nvwb_cli_path }} install --accept --docker --noninteractive"
+      become: true
+      environment:
+        HOME: "{{ ansible_env.HOME }}"
+      when: state == "present"
+      register: nvwb_install_result
+      changed_when: "'already installed' not in nvwb_install_result.stdout"
+
+    - name: Display installation status
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: NVIDIA Workbench installed successfully"
+      when: state == "present"
+
+    - name: Uninstall NVIDIA Workbench
+      ansible.builtin.command: "{{ nvwb_cli_path }} uninstall --noninteractive"
+      become: true
+      when: 
+        - state == "absent"
+        - nvwb_cli_path is file
+      register: nvwb_uninstall_result
+      changed_when: true
+      failed_when: false
+
+    - name: Remove NVIDIA Workbench directory
+      ansible.builtin.file:
+        path: "{{ ansible_env.HOME }}/.nvwb"
+        state: absent
+      when: state == "absent"

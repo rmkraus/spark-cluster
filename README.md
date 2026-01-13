@@ -139,3 +139,26 @@ This will:
 - Check if reboot is required
 - Automatically reboot nodes that need it
 - Wait for nodes to come back online
+
+### Install NVIDIA Workbench
+
+Install NVIDIA Workbench on all cluster nodes:
+
+```bash
+uv run ./playbooks/install-workbench.yml
+```
+
+This will:
+- Download the latest nvwb-cli for your platform
+- Install NVIDIA Workbench with Docker support
+- Run in non-interactive mode
+
+<details>
+
+<summary>Uninstall NVIDIA Workbench.</summary>
+
+```
+uv run ./playbooks/install-workbench.yml -e "state=absent"
+```
+
+</details>
