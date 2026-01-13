@@ -1,0 +1,31 @@
+{
+    "yaml.schemas": {
+      "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/playbook": [
+        "playbooks/*.yml",
+        "playbooks/*.yaml"
+      ],
+      "https://raw.githubusercontent.com/ansible/ansible-lint/main/src/ansiblelint/schemas/ansible.json#/$defs/tasks": [
+        "**/tasks/*.yml",
+        "**/tasks/*.yaml"
+      ]
+    },
+    "files.associations": {
+      "*.yml": "yaml",
+      "*.yaml": "yaml"
+    },
+    "[yaml]": {
+      "editor.tabSize": 2,
+      "editor.insertSpaces": true
+    },
+    "triggerTaskOnSave.tasks": {
+      "ansible-lint-current-file": [
+        "**/playbooks/**/*.{yml,yaml}",
+        "**/roles/**/*.{yml,yaml}",
+        "**/inventories/**/*.{yml,yaml}",
+        "**/inventory/**/*.{yml,yaml}",
+        "**/group_vars/**/*.{yml,yaml}",
+        "**/host_vars/**/*.{yml,yaml}"
+      ]
+    }
+  }
+  

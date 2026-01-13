@@ -1,0 +1,8 @@
+*.retry
+/tmp/
+.DS_Store
+*.log
+
+# Ignore data folder contents except .gitkeep
+data/*
+!data/.gitkeep

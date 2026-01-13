@@ -1,0 +1,139 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure Cluster Backbone
+  hosts: spark_cluster
+  gather_facts: true
+
+  vars:
+    state: present
+    bond_name: bond0
+    bond_mode: balance-xor
+
+  tasks:
+    - name: Ensure required packages are installed
+      ansible.builtin.apt:
+        name:
+          - network-manager
+          - iperf3
+        state: present
+        update_cache: false
+      become: true
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Get MAC address from first bond member interface
+      ansible.builtin.set_fact:
+        first_member_mac: "{{ ansible_facts[cluster_bond.members[0]]['macaddress'] }}"
+      when: state == "present"
+
+    - name: Create bond interface
+      community.general.nmcli:
+        conn_name: "{{ bond_name }}"
+        type: bond
+        ifname: "{{ bond_name }}"
+        mode: "{{ bond_mode }}"
+        ip4: "{{ cluster_bond.address }}"
+        mac: "{{ first_member_mac | default(omit) }}"
+        mtu: "{{ cluster_bond.mtu | default(omit) }}"
+        state: "{{ state }}"
+      become: true
+      register: bond_create_result
+
+    - name: Add member interfaces to bond
+      community.general.nmcli:
+        conn_name: "{{ bond_name }}-member-{{ item }}"
+        type: bond-slave
+        ifname: "{{ item }}"
+        master: "{{ bond_name }}"
+        slave_type: bond
+        mtu: "{{ cluster_bond.mtu | default(omit) }}"
+        state: "{{ state }}"
+      become: true
+      loop: "{{ cluster_bond.members }}"
+      register: bond_members_result
+
+    - name: Check if bond or members changed
+      ansible.builtin.set_fact:
+        bond_changed: "{{ bond_create_result.changed or bond_members_result.changed }}"
+      when: state == "present"
+
+    - name: Bring down member interfaces
+      ansible.builtin.command: nmcli connection down {{ bond_name }}-member-{{ item }}
+      become: true
+      loop: "{{ cluster_bond.members }}"
+      when: 
+        - state == "present"
+        - bond_changed | default(false)
+      failed_when: false
+
+    - name: Bring bond interface down
+      ansible.builtin.command: nmcli connection down {{ bond_name }}
+      become: true
+      when: 
+        - state == "present"
+        - bond_changed | default(false)
+      failed_when: false
+
+    - name: Bring bond interface up
+      ansible.builtin.command: nmcli connection up {{ bond_name }}
+      become: true
+      when: state == "present"
+      register: bond_up_result
+      failed_when: false
+
+- name: Network Performance Testing
+  hosts: spark_cluster
+  gather_facts: false
+  serial: 1
+  become: false
+
+  vars:
+    state: present
+    server_host: "{{ groups['spark_cluster'][0] }}"
+    server_ip: "{{ hostvars[server_host]['cluster_bond']['address'].split('/')[0] }}"
+
+  tasks:
+    - name: Setup iperf3 server
+      when: 
+        - state == "present"
+        - inventory_hostname == server_host
+      block:
+        - name: Start iperf3 server on first node
+          ansible.builtin.command: iperf3 -s -D
+          changed_when: false
+
+        - name: Wait for iperf3 server to start
+          ansible.builtin.pause:
+            seconds: 3
+
+    - name: Run speed test from client nodes
+      when: 
+        - state == "present"
+        - inventory_hostname != server_host
+      block:
+        - name: Run iperf3 speed test to first node
+          ansible.builtin.command: iperf3 -c {{ server_ip }} -t 15 -i 1 -P 4
+          register: iperf_result
+          changed_when: false
+
+        - name: Display speed test results
+          ansible.builtin.debug:
+            msg: "{{ iperf_result.stdout_lines[-4:-2] }}"
+
+- name: Cleanup iperf3 server
+  hosts: spark_cluster
+  gather_facts: false
+
+  vars:
+    state: present
+    server_host: "{{ groups['spark_cluster'][0] }}"
+
+  tasks:
+    - name: Stop iperf3 server on first node
+      ansible.builtin.command: pkill -9 iperf3
+      when: 
+        - state == "present"
+        - inventory_hostname == server_host
+      changed_when: false
+      failed_when: false
+
+

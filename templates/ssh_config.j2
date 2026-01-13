@@ -1,0 +1,11 @@
+# SSH configuration for spark-cluster
+# This file is managed by Ansible - DO NOT EDIT MANUALLY
+
+{% for host in groups['spark_cluster'] %}
+Host {{ host }}
+    HostName {{ hostvars[host]['ansible_host'] }}
+    User {{ hostvars[host]['ansible_user'] }}
+    IdentityFile {{ cluster_ssh_key_path }}
+    StrictHostKeyChecking accept-new
+
+{% endfor %}

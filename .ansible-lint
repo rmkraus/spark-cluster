@@ -1,0 +1,32 @@
+---
+# Ansible-lint configuration
+
+# Exclude paths
+exclude_paths:
+  - .venv/
+  - venv/
+  - data/
+  - .cache/
+  - .git/
+  - uv.lock
+
+# Enable checking of playbook/task files
+kinds:
+  - playbook: "playbooks/*.yml"
+  - playbook: "playbooks/*.yaml"
+  - tasks: "**/tasks/*.yml"
+  - tasks: "**/tasks/*.yaml"
+  - vars: "**/vars/*.yml"
+  - vars: "**/vars/*.yaml"
+  - handlers: "**/handlers/*.yml"
+  - handlers: "**/handlers/*.yaml"
+
+# Skip specific rules if needed (uncomment to use)
+skip_list:
+  - run-once[task]  # We intentionally use run_once for tasks that should execute once
+
+# Enable offline mode (doesn't check for galaxy roles)
+offline: false
+
+# Use default rules
+use_default_rules: true

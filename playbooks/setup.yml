@@ -1,0 +1,91 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Initial Cluster Setup - Configure SSH Keys
+  hosts: spark_cluster
+  gather_facts: true
+  vars_prompt:
+    - name: ansible_password
+      prompt: "Enter SSH password for initial connection (also used for sudo)"
+      private: true
+
+  vars:
+    ansible_become_password: "{{ ansible_password }}"
+    ansible_ssh_private_key_file: ""
+    state: present
+
+  tasks:
+    - name: Create ansible tmp directory
+      ansible.builtin.file:
+        path: "~{{ ansible_user }}/.ansible/tmp"
+        state: directory
+        mode: '0700'
+        owner: "{{ ansible_user }}"
+      become: true
+      when: state == "present"
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: dist
+        update_cache: false
+      become: true
+      when: state == "present" and ansible_facts['os_family'] == "Debian"
+      register: apt_upgrade_result
+
+    - name: Check if reboot is required
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
+      register: reboot_required
+      when: state == "present"
+
+    - name: Reboot if required
+      ansible.builtin.reboot:
+        reboot_timeout: 600
+      become: true
+      when: state == "present" and reboot_required.stat.exists
+
+    - name: Check if SSH keypair exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../data/spark_cluster_key"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      register: ssh_key_stat
+
+    - name: Generate SSH keypair locally
+      ansible.builtin.command: ssh-keygen -t rsa -b 4096 -f {{ playbook_dir }}/../data/spark_cluster_key -N "" -C "spark-cluster-ansible"
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: state == "present" and not ssh_key_stat.stat.exists
+      changed_when: true
+
+    - name: Ensure .ssh directory exists on remote hosts
+      ansible.builtin.file:
+        path: "~/.ssh"
+        state: directory
+        mode: '0700'
+      when: state == "present"
+
+    - name: Manage public key in authorized_keys
+      ansible.posix.authorized_key:
+        user: "{{ ansible_user }}"
+        state: "{{ state }}"
+        key: "{{ lookup('file', playbook_dir + '/../data/spark_cluster_key.pub') }}"
+      when: ssh_key_stat.stat.exists
+
+    - name: Add passwordless sudo rule
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers.d/{{ ansible_user }}
+        line: "{{ ansible_user }} ALL=(ALL) NOPASSWD:ALL"
+        create: true
+        mode: '0440'
+        validate: 'visudo -cf %s'
+      become: true
+      when: state == "present"
+
+    - name: Remove passwordless sudo configuration
+      ansible.builtin.file:
+        path: /etc/sudoers.d/{{ ansible_user }}
+        state: absent
+      become: true
+      when: state == "absent"

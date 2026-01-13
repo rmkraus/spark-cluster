@@ -1,0 +1,64 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Configure Local SSH Client
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+
+  vars:
+    state: present
+    home_dir: "{{ lookup('env', 'HOME') }}"
+    ssh_config_path: "{{ home_dir }}/.ssh/config"
+    cluster_ssh_config: "{{ playbook_dir }}/../data/ssh_config"
+    cluster_ssh_key_path: "{{ playbook_dir }}/../data/spark_cluster_key"
+
+  tasks:
+    - name: Ensure .ssh directory exists
+      ansible.builtin.file:
+        path: "{{ home_dir }}/.ssh"
+        state: directory
+        mode: '0700'
+
+    - name: Get absolute path to cluster SSH key
+      ansible.builtin.stat:
+        path: "{{ cluster_ssh_key_path }}"
+      register: ssh_key_abs
+      when: state == "present"
+
+    - name: Generate cluster SSH config from inventory
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../templates/ssh_config.j2"
+        dest: "{{ cluster_ssh_config }}"
+        mode: '0600'
+      vars:
+        cluster_ssh_key_path: "{{ ssh_key_abs.stat.path }}"
+      when: state == "present"
+
+    - name: Get absolute path to cluster SSH config
+      ansible.builtin.stat:
+        path: "{{ cluster_ssh_config }}"
+      register: ssh_config_abs
+      when: state == "present"
+
+    - name: Add include directive to SSH config
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_config_path }}"
+        line: "Include {{ ssh_config_abs.stat.path }}"
+        insertbefore: BOF
+        create: true
+        mode: '0600'
+      when: state == "present"
+
+    - name: Remove include directive from SSH config
+      ansible.builtin.lineinfile:
+        path: "{{ ssh_config_path }}"
+        regexp: "^Include.*spark-cluster/data/ssh_config$"
+        state: absent
+      when: state == "absent"
+
+    - name: Remove generated SSH config file
+      ansible.builtin.file:
+        path: "{{ cluster_ssh_config }}"
+        state: absent
+      when: state == "absent"
