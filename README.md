@@ -135,6 +135,7 @@ uv run ./playbooks/update.yml
 This will:
 - Update package cache
 - Upgrade all packages
+- Refresh firmware metadata and upgrade firmware
 - Check if reboot is required
 - Automatically reboot nodes that need it
 - Wait for nodes to come back online

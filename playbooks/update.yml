@@ -18,6 +18,22 @@
       when: ansible_facts['os_family'] == "Debian"
       register: apt_upgrade_result
 
+    - name: Refresh firmware update metadata
+      ansible.builtin.command: fwupdmgr refresh
+      register: fwupd_refresh_result
+      changed_when: false
+      failed_when: false
+
+    - name: Upgrade firmware
+      ansible.builtin.command: fwupdmgr upgrade -y
+      register: fwupd_upgrade_result
+      changed_when: "'Successfully installed' in fwupd_upgrade_result.stdout"
+      failed_when: false
+
+    - name: Display firmware update results
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ fwupd_upgrade_result.stdout_lines if fwupd_upgrade_result.stdout_lines else 'No firmware updates available' }}"
+
     - name: Check if reboot is required
       ansible.builtin.stat:
         path: /var/run/reboot-required
